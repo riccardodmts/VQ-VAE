@@ -1,4 +1,4 @@
-# VQVAE
+# VQ-VAE
 Simple PyTorch implementation of VQ-VAE: https://arxiv.org/pdf/1711.00937.
 
 ## Usage
