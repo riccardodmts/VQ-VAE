@@ -1,9 +1,8 @@
-"""Reconstruct a batch of images (validation)"""
-
 import os
-#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from models.vqvae import VQVAE
-
+from models.pixelcnn import PixelCNN2d
+from torch.optim import Adam
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
@@ -11,9 +10,19 @@ import torch.nn.functional as F
 
 import torch
 import numpy as np
+from tqdm import tqdm
+
 
 import matplotlib.pyplot as plt
 from torchvision.utils import make_grid
+
+def show(img):
+    """Save image"""
+    npimg = img.numpy()
+    fig = plt.imshow( np.transpose(npimg, (1,2,0)), interpolation='nearest')
+    plt.savefig('output_gen.png')
+    fig.axes.get_xaxis().set_visible(False)
+    fig.axes.get_yaxis().set_visible(False)
 
 
 validation_data = datasets.CIFAR10(root="data", train=False, download=True,
@@ -22,59 +31,40 @@ validation_data = datasets.CIFAR10(root="data", train=False, download=True,
                                       transforms.Normalize((0.5,0.5,0.5), (1.0,1.0,1.0))
                                   ]))
 
+val_dataloader = DataLoader(validation_data,
+                             batch_size=32,
+                             shuffle=False,
+                             pin_memory=True)
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-"""PARAMS"""
-batch_size = 256
-num_training_updates = 15000
+
+"""VQ-VAE params"""
 
 num_hiddens = 128
 num_residual_hiddens = 32
 num_residual_layers = 2
-
 embedding_dim = 64
 num_embeddings = 512
-
 commitment_cost = 0.25
 
-learning_rate = 1e-3
-
-
+"""Models"""
 model = VQVAE(num_hiddens, num_residual_hiddens, num_residual_layers, num_embeddings, embedding_dim, commitment_cost, device=device).to(device)
-
-
-"""LOAD model"""
 model.load_state_dict(torch.load("./vqvae_model.pt"))
 
-"""SHOW RESULTS: reconstructions for validations data"""
-
-validation_loader = DataLoader(validation_data,
-                               batch_size=32,
-                               shuffle=True,
-                               pin_memory=True)
+prior = PixelCNN2d(input_dim=num_embeddings, dim=64, num_blocks=12).to(device)
+prior.load_state_dict(torch.load("./vqvae_prior.pt"))
 
 model.eval()
+prior.eval()
 
-(valid_originals, _) = next(iter(validation_loader))
-valid_originals = valid_originals.to(device)
+#labels = torch.randint(10, (32,)).int().to(device)
+labels = torch.ones(32).long().to(device) * 8
+print(labels)
 
-# encode samples
-enc_output = model.encode(valid_originals)
-#enc_output = model.vq.sample((32,8, 8)) # try this to see that the model is not able to generate samples -> suitable prior needed
+latents_int = prior.sample(labels, device).long()
+enc = model.vq.to_embedding(latents_int)
 
-# reconstruct
-valid_reconstructions = model.reconstruct(enc_output)
-
-
-"""PLOT"""
-
-def show(img):
-    npimg = img.numpy()
-    fig = plt.imshow( np.transpose(npimg, (1,2,0)), interpolation='nearest')
-    plt.savefig('output.png')
-    fig.axes.get_xaxis().set_visible(False)
-    fig.axes.get_yaxis().set_visible(False)
-
-# clamp needed if output out of range [0,1]
+valid_reconstructions = model.reconstruct(enc)
 show(make_grid(torch.clamp(valid_reconstructions.cpu().data+0.5, min=0.0,max=1.0) ))

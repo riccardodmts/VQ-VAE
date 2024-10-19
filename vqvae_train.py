@@ -1,3 +1,5 @@
+"""Training for VQ-VAE, CIFAR-10"""
+
 import os
 #os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from models.vqvae import VQVAE
