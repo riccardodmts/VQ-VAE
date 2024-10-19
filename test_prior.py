@@ -1,5 +1,5 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 from models.vqvae import VQVAE
 from models.pixelcnn import PixelCNN2d
 from torch.optim import Adam
